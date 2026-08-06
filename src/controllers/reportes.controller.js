@@ -1,0 +1,102 @@
+const { pool } = require('../config/database');
+
+function filtrosPeriodo(query) {
+  const condiciones = [];
+  const params = [];
+
+  if (query.fecha_desde) {
+    condiciones.push('g.fecha >= ?');
+    params.push(query.fecha_desde);
+  }
+  if (query.fecha_hasta) {
+    condiciones.push('g.fecha <= ?');
+    params.push(query.fecha_hasta);
+  }
+  if (query.usuario_id) {
+    condiciones.push('g.usuario_id = ?');
+    params.push(query.usuario_id);
+  }
+
+  return { where: condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '', params };
+}
+
+async function totales(req, res, next) {
+  try {
+    const { where, params } = filtrosPeriodo(req.query);
+    const [filas] = await pool.query(
+      `SELECT
+         COUNT(*) AS cantidad_gastos,
+         COALESCE(SUM(monto), 0) AS monto_total,
+         SUM(estado = 'aprobado') AS aprobados,
+         SUM(estado = 'rechazado') AS rechazados,
+         SUM(estado = 'pendiente') AS pendientes
+       FROM gastos g
+       ${where}`,
+      params
+    );
+
+    const fila = filas[0];
+    const totalRevisados = Number(fila.aprobados) + Number(fila.rechazados);
+    const tasaAprobacion = totalRevisados > 0 ? Number(fila.aprobados) / totalRevisados : 0;
+
+    res.json({ ...fila, tasa_aprobacion: Number(tasaAprobacion.toFixed(4)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function porCategoria(req, res, next) {
+  try {
+    const { where, params } = filtrosPeriodo(req.query);
+    const [filas] = await pool.query(
+      `SELECT c.nombre AS categoria, COUNT(*) AS cantidad, COALESCE(SUM(g.monto), 0) AS monto_total
+       FROM gastos g
+       JOIN categorias c ON c.id = g.categoria_id
+       ${where}
+       GROUP BY c.id, c.nombre
+       ORDER BY monto_total DESC`,
+      params
+    );
+    res.json(filas);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function porEmpleado(req, res, next) {
+  try {
+    const { where, params } = filtrosPeriodo(req.query);
+    const [filas] = await pool.query(
+      `SELECT u.id AS usuario_id, u.nombre AS empleado, COUNT(*) AS cantidad, COALESCE(SUM(g.monto), 0) AS monto_total
+       FROM gastos g
+       JOIN usuarios u ON u.id = g.usuario_id
+       ${where}
+       GROUP BY u.id, u.nombre
+       ORDER BY monto_total DESC`,
+      params
+    );
+    res.json(filas);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function general(req, res, next) {
+  try {
+    const { where, params } = filtrosPeriodo(req.query);
+    const [filas] = await pool.query(
+      `SELECT g.id, g.monto, g.estado, g.fecha, c.nombre AS categoria, u.nombre AS empleado
+       FROM gastos g
+       JOIN categorias c ON c.id = g.categoria_id
+       JOIN usuarios u ON u.id = g.usuario_id
+       ${where}
+       ORDER BY g.fecha DESC`,
+      params
+    );
+    res.json(filas);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { totales, porCategoria, porEmpleado, general };
