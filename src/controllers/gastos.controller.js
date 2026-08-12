@@ -12,11 +12,11 @@ async function crear(req, res, next) {
 
     const [resultado] = await pool.query(
       `INSERT INTO gastos (usuario_id, categoria_id, monto, descripcion, fecha, estado)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
       [req.user.id, categoria_id, monto, descripcion || null, fecha, estado]
     );
 
-    res.status(201).json({ id: resultado.insertId, estado });
+    res.status(201).json({ id: resultado[0].id, estado });
   } catch (err) {
     next(err);
   }

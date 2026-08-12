@@ -25,11 +25,11 @@ async function crear(req, res, next) {
     }
 
     const [resultado] = await pool.query(
-      'INSERT INTO categorias (nombre, descripcion) VALUES (?, ?)',
+      'INSERT INTO categorias (nombre, descripcion) VALUES (?, ?) RETURNING id',
       [nombre, descripcion || null]
     );
 
-    res.status(201).json({ id: resultado.insertId, nombre, descripcion: descripcion || null });
+    res.status(201).json({ id: resultado[0].id, nombre, descripcion: descripcion || null });
   } catch (err) {
     next(err);
   }

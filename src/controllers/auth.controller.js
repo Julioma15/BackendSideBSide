@@ -26,12 +26,12 @@ async function register(req, res, next) {
 
     const hash = await bcrypt.hash(contrasena, SALT_ROUNDS);
     const [resultado] = await pool.query(
-      'INSERT INTO usuarios (nombre, email, contrasena, rol, empresa) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO usuarios (nombre, email, contrasena, rol, empresa) VALUES (?, ?, ?, ?, ?) RETURNING id',
       [nombre, email, hash, rol || 'operador', empresa || null]
     );
 
     res.status(201).json({
-      id: resultado.insertId,
+      id: resultado[0].id,
       nombre,
       email,
       rol: rol || 'operador',

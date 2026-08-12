@@ -27,9 +27,9 @@ async function totales(req, res, next) {
       `SELECT
          COUNT(*) AS cantidad_gastos,
          COALESCE(SUM(monto), 0) AS monto_total,
-         SUM(estado = 'aprobado') AS aprobados,
-         SUM(estado = 'rechazado') AS rechazados,
-         SUM(estado = 'pendiente') AS pendientes
+         SUM(CASE WHEN estado = 'aprobado' THEN 1 ELSE 0 END) AS aprobados,
+         SUM(CASE WHEN estado = 'rechazado' THEN 1 ELSE 0 END) AS rechazados,
+         SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) AS pendientes
        FROM gastos g
        ${where}`,
       params

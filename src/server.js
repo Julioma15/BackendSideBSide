@@ -31,10 +31,10 @@ const PORT = process.env.PORT || 5000;
 async function iniciar() {
   try {
     await verificarConexion();
-    console.log('Conexion a MySQL exitosa');
+    console.log('Conexion a PostgreSQL exitosa');
     app.listen(PORT, () => console.log(`Servidor SideBSide escuchando en puerto ${PORT}`));
   } catch (err) {
-    console.error('No se pudo conectar a MySQL:', err.message);
+    console.error('No se pudo conectar a PostgreSQL:', err.message);
     process.exit(1);
   }
 }
