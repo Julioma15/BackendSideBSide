@@ -1,14 +1,14 @@
+const path = require('path');
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { validarGasto } = require('../utils/validations');
-
-const ESTADOS_EDITABLES = ['borrador', 'pendiente'];
+const { ESTADO_GASTO, ROL, ESTADOS_EDITABLES } = require('../constants');
 
 async function crear(req, res, next) {
   try {
     validarGasto(req.body);
     const { monto, categoria_id, descripcion, fecha, enviar } = req.body;
-    const estado = enviar ? 'pendiente' : 'borrador';
+    const estado = enviar ? ESTADO_GASTO.PENDIENTE : ESTADO_GASTO.BORRADOR;
 
     const [resultado] = await pool.query(
       `INSERT INTO gastos (usuario_id, categoria_id, monto, descripcion, fecha, estado)
@@ -28,7 +28,7 @@ async function listar(req, res, next) {
     const condiciones = [];
     const params = [];
 
-    if (req.user.rol !== 'admin') {
+    if (req.user.rol !== ROL.ADMIN) {
       condiciones.push('g.usuario_id = ?');
       params.push(req.user.id);
     } else if (usuario_id) {
@@ -78,7 +78,7 @@ async function obtenerGastoOAutorizar(id, user) {
   if (!gasto) {
     throw new AppError('Gasto no encontrado', 404);
   }
-  if (user.rol !== 'admin' && gasto.usuario_id !== user.id) {
+  if (user.rol !== ROL.ADMIN && gasto.usuario_id !== user.id) {
     throw new AppError('No tienes permiso sobre este gasto', 403);
   }
   return gasto;
@@ -104,7 +104,7 @@ async function actualizar(req, res, next) {
     }
 
     const { monto, categoria_id, descripcion, fecha, enviar } = req.body;
-    const estado = enviar ? 'pendiente' : gasto.estado;
+    const estado = enviar ? ESTADO_GASTO.PENDIENTE : gasto.estado;
 
     await pool.query(
       `UPDATE gastos SET
@@ -150,10 +150,25 @@ async function subirComprobante(req, res, next) {
       throw new AppError('No se recibio ninguna imagen', 400);
     }
 
-    const fotoUrl = `/uploads/${req.file.filename}`;
-    await pool.query('UPDATE gastos SET foto_url = ? WHERE id = ?', [fotoUrl, gasto.id]);
+    await pool.query('UPDATE gastos SET foto_url = ? WHERE id = ?', [req.file.filename, gasto.id]);
 
-    res.json({ foto_url: fotoUrl });
+    res.json({ comprobante_url: `/api/gastos/${gasto.id}/comprobante` });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function verComprobante(req, res, next) {
+  try {
+    const gasto = await obtenerGastoOAutorizar(req.params.id, req.user);
+    if (!gasto.foto_url) {
+      throw new AppError('Este gasto no tiene comprobante', 404);
+    }
+
+    // basename descarta cualquier componente de ruta: protege contra
+    // path traversal y tolera las filas viejas guardadas como "/uploads/x.jpg".
+    const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads');
+    res.sendFile(path.join(uploadDir, path.basename(gasto.foto_url)));
   } catch (err) {
     next(err);
   }
@@ -166,5 +181,6 @@ module.exports = {
   actualizar,
   eliminar,
   subirComprobante,
+  verComprobante,
   obtenerGastoOAutorizar,
 };

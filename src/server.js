@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 
 const { verificarConexion } = require('./config/database');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -15,7 +14,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '..', process.env.UPLOAD_DIR || 'uploads')));
+
+// Los comprobantes NO se sirven como estaticos: son documentos fiscales con
+// montos y datos de empleados. Se entregan por GET /api/gastos/:id/comprobante,
+// que valida token y propiedad del gasto.
 
 app.use('/api/auth', authRoutes);
 app.use('/api/gastos', gastosRoutes);

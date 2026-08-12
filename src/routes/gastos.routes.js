@@ -13,6 +13,7 @@ router.get('/pendientes', soloAdmin, aprobacionesController.listarPendientes);
 router.put('/:id/aprobar', soloAdmin, aprobacionesController.aprobar);
 router.put('/:id/rechazar', soloAdmin, aprobacionesController.rechazar);
 router.post('/:id/comprobante', upload.single('foto'), gastosController.subirComprobante);
+router.get('/:id/comprobante', gastosController.verComprobante);
 
 // CRUD de gastos
 router.post('/', gastosController.crear);

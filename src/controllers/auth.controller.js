@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { validarRegistro, validarLogin } = require('../utils/validations');
+const { ROL, ESTADO_REGISTRO } = require('../constants');
 
 const SALT_ROUNDS = 10;
 
@@ -27,14 +28,14 @@ async function register(req, res, next) {
     const hash = await bcrypt.hash(contrasena, SALT_ROUNDS);
     const [resultado] = await pool.query(
       'INSERT INTO usuarios (nombre, email, contrasena, rol, empresa) VALUES (?, ?, ?, ?, ?) RETURNING id',
-      [nombre, email, hash, rol || 'operador', empresa || null]
+      [nombre, email, hash, rol || ROL.OPERADOR, empresa || null]
     );
 
     res.status(201).json({
       id: resultado[0].id,
       nombre,
       email,
-      rol: rol || 'operador',
+      rol: rol || ROL.OPERADOR,
     });
   } catch (err) {
     next(err);
@@ -49,7 +50,7 @@ async function login(req, res, next) {
     const [filas] = await pool.query('SELECT * FROM usuarios WHERE email = ?', [email]);
     const usuario = filas[0];
 
-    if (!usuario || usuario.estado !== 'activo') {
+    if (!usuario || usuario.estado !== ESTADO_REGISTRO.ACTIVO) {
       throw new AppError('Credenciales invalidas', 401);
     }
 

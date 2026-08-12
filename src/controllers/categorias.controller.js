@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
+const { ESTADOS_REGISTRO_VALIDOS } = require('../constants');
 
 async function listar(req, res, next) {
   try {
@@ -44,7 +45,7 @@ async function actualizar(req, res, next) {
     if (existentes.length === 0) {
       throw new AppError('Categoria no encontrada', 404);
     }
-    if (estado && !['activo', 'inactivo'].includes(estado)) {
+    if (estado && !ESTADOS_REGISTRO_VALIDOS.includes(estado)) {
       throw new AppError('Estado invalido', 400);
     }
 

@@ -1,4 +1,5 @@
 const { AppError } = require('../middleware/errorHandler');
+const { ROLES_VALIDOS } = require('../constants');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,7 +13,7 @@ function validarRegistro({ nombre, email, contrasena, rol }) {
   if (!contrasena || contrasena.length < 8) {
     throw new AppError('La contrasena debe tener al menos 8 caracteres', 400);
   }
-  if (rol && !['operador', 'admin'].includes(rol)) {
+  if (rol && !ROLES_VALIDOS.includes(rol)) {
     throw new AppError('Rol invalido', 400);
   }
 }

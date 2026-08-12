@@ -1,12 +1,13 @@
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { validarRechazo } = require('../utils/validations');
+const { ESTADO_GASTO, ESTADO_APROBACION } = require('../constants');
 
 async function listarPendientes(req, res, next) {
   try {
     const { usuario_id, categoria_id, fecha_desde, fecha_hasta } = req.query;
-    const condiciones = ["g.estado = 'pendiente'"];
-    const params = [];
+    const condiciones = ['g.estado = ?'];
+    const params = [ESTADO_GASTO.PENDIENTE];
 
     if (usuario_id) {
       condiciones.push('g.usuario_id = ?');
@@ -48,7 +49,7 @@ async function obtenerPendiente(id) {
   if (!gasto) {
     throw new AppError('Gasto no encontrado', 404);
   }
-  if (gasto.estado !== 'pendiente') {
+  if (gasto.estado !== ESTADO_GASTO.PENDIENTE) {
     throw new AppError('Solo se pueden aprobar/rechazar gastos pendientes', 400);
   }
   return gasto;
@@ -60,10 +61,10 @@ async function aprobar(req, res, next) {
     const gasto = await obtenerPendiente(req.params.id);
 
     await conexion.beginTransaction();
-    await conexion.query('UPDATE gastos SET estado = ? WHERE id = ?', ['aprobado', gasto.id]);
+    await conexion.query('UPDATE gastos SET estado = ? WHERE id = ?', [ESTADO_GASTO.APROBADO, gasto.id]);
     await conexion.query(
       'INSERT INTO aprobaciones (gasto_id, admin_id, comentario, estado) VALUES (?, ?, ?, ?)',
-      [gasto.id, req.user.id, req.body.comentario || null, 'aprobado']
+      [gasto.id, req.user.id, req.body.comentario || null, ESTADO_APROBACION.APROBADO]
     );
     await conexion.commit();
 
@@ -83,10 +84,10 @@ async function rechazar(req, res, next) {
     const gasto = await obtenerPendiente(req.params.id);
 
     await conexion.beginTransaction();
-    await conexion.query('UPDATE gastos SET estado = ? WHERE id = ?', ['rechazado', gasto.id]);
+    await conexion.query('UPDATE gastos SET estado = ? WHERE id = ?', [ESTADO_GASTO.RECHAZADO, gasto.id]);
     await conexion.query(
       'INSERT INTO aprobaciones (gasto_id, admin_id, comentario, estado) VALUES (?, ?, ?, ?)',
-      [gasto.id, req.user.id, req.body.comentario, 'rechazado']
+      [gasto.id, req.user.id, req.body.comentario, ESTADO_APROBACION.RECHAZADO]
     );
     await conexion.commit();
 

@@ -5,6 +5,7 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
+const { ROL } = require('../constants');
 
 async function main() {
   const [nombre, email, contrasena] = process.argv.slice(2);
@@ -17,7 +18,7 @@ async function main() {
   const hash = await bcrypt.hash(contrasena, 10);
   await pool.query(
     'INSERT INTO usuarios (nombre, email, contrasena, rol) VALUES (?, ?, ?, ?)',
-    [nombre, email, hash, 'admin']
+    [nombre, email, hash, ROL.ADMIN]
   );
 
   console.log(`Admin creado: ${email}`);

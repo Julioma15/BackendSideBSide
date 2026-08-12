@@ -16,6 +16,12 @@ API REST para el control de gastos operativos de SideBSide (Node.js + Express + 
    ```
    (o pega el contenido de `sql/schema.sql` en pgAdmin, ya conectado a la base `sidebside`).
 
+   Si ya tenias la base creada de antes, en vez de recrearla aplica las migraciones
+   pendientes de `sql/migrations/` en orden:
+   ```
+   psql -U postgres -d sidebside -f sql/migrations/001_timestamptz_y_check_rechazo.sql
+   ```
+
 3. Copiar `.env.example` a `.env` y ajustar credenciales de PostgreSQL y `JWT_SECRET`:
    ```
    cp .env.example .env
@@ -69,8 +75,15 @@ curl http://localhost:5000/api/reportes/por-categoria -H "Authorization: Bearer 
 
 ## Notas de alcance (MVP)
 
-- Fotos de comprobantes se guardan localmente en `uploads/` (servidas en `/uploads/<archivo>`).
-  Para produccion en AWS se migra a S3 (ver documento de Arquitectura).
+- Fotos de comprobantes se guardan localmente en `uploads/`, pero **no se sirven como
+  estaticos**: son documentos fiscales. Se descargan por `GET /api/gastos/:id/comprobante`,
+  que exige token y valida que seas el dueno del gasto o un admin.
+  Para produccion en AWS se migra a S3 con URLs firmadas (ver documento de Arquitectura).
+- Los valores de estados y roles viven en `src/constants.js`. Si agregas uno, actualiza
+  tambien el `CHECK` correspondiente en `sql/schema.sql` con una migracion nueva.
+- Las columnas de fecha/hora son `TIMESTAMPTZ` para que el huso horario no se pierda al
+  desplegar en un servidor en UTC. `gastos.fecha` es `DATE` a proposito: es la fecha del
+  gasto segun el negocio, no un instante.
 - `gastos.estado` incluye `borrador` ademas de `pendiente/aprobado/rechazado` para soportar
   guardar un gasto sin enviarlo a revision (RF2.5).
 - `gastos.categoria_id` es FK a `categorias` (en la guia original era un VARCHAR libre); se
