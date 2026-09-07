@@ -19,6 +19,7 @@ CREATE TABLE usuarios (
   rol VARCHAR(20) NOT NULL DEFAULT 'operador' CHECK (rol IN ('operador', 'admin')),
   estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
   empresa VARCHAR(100),
+  num_empleado VARCHAR(30),
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -27,6 +28,21 @@ CREATE TABLE categorias (
   nombre VARCHAR(100) NOT NULL UNIQUE,
   descripcion TEXT,
   estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
+  color VARCHAR(7) NOT NULL DEFAULT '#6b7280',
+  icono VARCHAR(50) NOT NULL DEFAULT 'Package',
+  fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Un viaje agrupa los gastos de un empleado durante un periodo con
+-- presupuesto asignado. Lo crea un admin y lo consume el operador dueno.
+CREATE TABLE viajes (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(150) NOT NULL,
+  usuario_id INT NOT NULL REFERENCES usuarios(id),
+  fecha_inicio DATE NOT NULL,
+  fecha_fin DATE NOT NULL,
+  presupuesto DECIMAL(10, 2) NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'completado')),
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -37,13 +53,20 @@ CREATE TABLE categorias (
 -- `fecha` es DATE a proposito: es la fecha del gasto segun el negocio
 -- ("el 17 de julio cargue diesel"), no un instante. Ponerle huso horario
 -- haria que un gasto del dia 17 se leyera como del 16 en otra zona.
+--
+-- `viaje_id` es nullable a nivel de columna (evita romper migraciones sobre
+-- bases con gastos ya creados) pero se exige en `validarGasto` para todo
+-- gasto nuevo.
 
 CREATE TABLE gastos (
   id SERIAL PRIMARY KEY,
   usuario_id INT NOT NULL REFERENCES usuarios(id),
   categoria_id INT NOT NULL REFERENCES categorias(id),
+  viaje_id INT REFERENCES viajes(id),
   monto DECIMAL(10, 2) NOT NULL,
+  moneda VARCHAR(3) NOT NULL DEFAULT 'MXN',
   descripcion TEXT,
+  ubicacion VARCHAR(255),
   foto_url VARCHAR(255),
   estado VARCHAR(20) NOT NULL DEFAULT 'borrador'
     CHECK (estado IN ('borrador', 'pendiente', 'aprobado', 'rechazado')),

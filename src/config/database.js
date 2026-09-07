@@ -1,4 +1,20 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// pg devuelve NUMERIC/DECIMAL (monto, presupuesto) y BIGINT (COUNT(*) en
+// reportes) como string por defecto, para no perder precision. El front hace
+// aritmetica y .toFixed() sobre esos campos, asi que se convierten a number
+// aqui, una sola vez, para toda la app. Los montos nunca llegan a superar
+// Number.MAX_SAFE_INTEGER en este dominio, asi que parseInt es seguro.
+types.setTypeParser(1700, (val) => parseFloat(val)); // numeric/decimal
+types.setTypeParser(20, (val) => parseInt(val, 10)); // int8/bigint (COUNT)
+
+// gastos.fecha es DATE a proposito (ver comentario en sql/schema.sql): es la
+// fecha del gasto segun el negocio, no un instante. El parser por defecto de
+// pg convierte DATE a un objeto Date de JS, que luego JSON.stringify serializa
+// con hora y zona ("2026-08-21T06:00:00.000Z") — exactamente lo que ese
+// comentario dice que hay que evitar. El texto crudo que manda Postgres ya es
+// "YYYY-MM-DD", asi que se devuelve tal cual.
+types.setTypeParser(1082, (val) => val); // date
 
 const poolPg = new Pool({
   host: process.env.DB_HOST,

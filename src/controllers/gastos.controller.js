@@ -7,13 +7,22 @@ const { ESTADO_GASTO, ROL, ESTADOS_EDITABLES } = require('../constants');
 async function crear(req, res, next) {
   try {
     validarGasto(req.body);
-    const { monto, categoria_id, descripcion, fecha, enviar } = req.body;
+    const { monto, categoria_id, descripcion, fecha, enviar, viaje_id, moneda, ubicacion } = req.body;
     const estado = enviar ? ESTADO_GASTO.PENDIENTE : ESTADO_GASTO.BORRADOR;
 
+    const [viajes] = await pool.query('SELECT usuario_id FROM viajes WHERE id = ?', [viaje_id]);
+    const viaje = viajes[0];
+    if (!viaje) {
+      throw new AppError('El viaje no existe', 404);
+    }
+    if (req.user.rol !== ROL.ADMIN && viaje.usuario_id !== req.user.id) {
+      throw new AppError('No tienes permiso sobre ese viaje', 403);
+    }
+
     const [resultado] = await pool.query(
-      `INSERT INTO gastos (usuario_id, categoria_id, monto, descripcion, fecha, estado)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-      [req.user.id, categoria_id, monto, descripcion || null, fecha, estado]
+      `INSERT INTO gastos (usuario_id, categoria_id, viaje_id, monto, moneda, descripcion, ubicacion, fecha, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [req.user.id, categoria_id, viaje_id, monto, moneda || 'MXN', descripcion || null, ubicacion || null, fecha, estado]
     );
 
     res.status(201).json({ id: resultado[0].id, estado });
@@ -24,7 +33,7 @@ async function crear(req, res, next) {
 
 async function listar(req, res, next) {
   try {
-    const { estado, categoria_id, fecha_desde, fecha_hasta, usuario_id } = req.query;
+    const { estado, categoria_id, fecha_desde, fecha_hasta, usuario_id, viaje_id } = req.query;
     const condiciones = [];
     const params = [];
 
@@ -44,6 +53,10 @@ async function listar(req, res, next) {
       condiciones.push('g.categoria_id = ?');
       params.push(categoria_id);
     }
+    if (viaje_id) {
+      condiciones.push('g.viaje_id = ?');
+      params.push(viaje_id);
+    }
     if (fecha_desde) {
       condiciones.push('g.fecha >= ?');
       params.push(fecha_desde);
@@ -56,7 +69,8 @@ async function listar(req, res, next) {
     const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
 
     const [filas] = await pool.query(
-      `SELECT g.id, g.monto, g.descripcion, g.foto_url, g.estado, g.fecha, g.fecha_creacion,
+      `SELECT g.id, g.monto, g.moneda, g.descripcion, g.ubicacion, g.foto_url, g.estado,
+              g.fecha, g.fecha_creacion, g.viaje_id, g.categoria_id,
               c.nombre AS categoria, u.nombre AS empleado, u.id AS usuario_id
        FROM gastos g
        JOIN categorias c ON c.id = g.categoria_id
@@ -103,7 +117,7 @@ async function actualizar(req, res, next) {
       throw new AppError('Solo se pueden editar gastos en borrador o pendientes', 400);
     }
 
-    const { monto, categoria_id, descripcion, fecha, enviar } = req.body;
+    const { monto, categoria_id, descripcion, fecha, enviar, moneda, ubicacion } = req.body;
     const estado = enviar ? ESTADO_GASTO.PENDIENTE : gasto.estado;
 
     await pool.query(
@@ -112,9 +126,11 @@ async function actualizar(req, res, next) {
         categoria_id = COALESCE(?, categoria_id),
         descripcion = COALESCE(?, descripcion),
         fecha = COALESCE(?, fecha),
+        moneda = COALESCE(?, moneda),
+        ubicacion = COALESCE(?, ubicacion),
         estado = ?
        WHERE id = ?`,
-      [monto ?? null, categoria_id ?? null, descripcion ?? null, fecha ?? null, estado, gasto.id]
+      [monto ?? null, categoria_id ?? null, descripcion ?? null, fecha ?? null, moneda ?? null, ubicacion ?? null, estado, gasto.id]
     );
 
     res.json({ mensaje: 'Gasto actualizado' });

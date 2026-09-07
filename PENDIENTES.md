@@ -1,7 +1,59 @@
 # Pendientes del backend
 
-Estado al 2026-08-11. Este archivo es para retomar el trabajo sin tener que
-reconstruir el contexto: dice que falta, por que, y que ya se decidio.
+Estado al 2026-08-11 (ver actualizacion 2026-08-23 abajo). Este archivo es
+para retomar el trabajo sin tener que reconstruir el contexto: dice que
+falta, por que, y que ya se decidio.
+
+## Actualizacion 2026-08-23 — integracion con el frontend
+
+Pamela ya tenia el frontend completo (`sidebside-frontend/`, clonado de
+`TerryPotato/sideBside`) pero 100% mockeado. Se conecto con el backend real:
+
+- **Modulo `viajes` nuevo de punta a punta**: no existia en el backend (tabla,
+  controller, rutas). Se agrego siguiendo el mismo patron de `gastos`
+  (ownership por `obtenerViajeOAutorizar`, admin ve todo, operador solo lo
+  suyo). Migracion `sql/migrations/002_viajes_y_campos_gasto.sql`.
+- **CRUD de usuarios nuevo** (`/api/usuarios`, solo admin): el backend solo
+  tenia `POST /auth/register`. `eliminar` es soft-delete (`estado=inactivo`),
+  no DELETE fisico, porque rompia la FK con `gastos.usuario_id`. Al crear, se
+  genera una password temporal aleatoria que se devuelve una sola vez en la
+  respuesta (no hay servicio de correo).
+- **Campos nuevos en `gastos`**: `viaje_id`, `moneda`, `ubicacion` (el front
+  ya los pedia). **Campos nuevos en `categorias`**: `color`, `icono`. Campo
+  nuevo en `usuarios`: `num_empleado`.
+- **`reportes.controller.js`**: se agrego `porMes` (grafica de tendencia
+  mensual) y se extendio `totales` con montos por estado
+  (`monto_aprobado`/`monto_rechazado`/`monto_pendiente`), que antes solo
+  traia conteos.
+- **CORS restringido** al origen del front (`FRONTEND_URL`, default
+  `http://localhost:5173`) — era el punto suelto que ya estaba anotado abajo.
+- **Dos bugs reales de tipos en `pg`, atrapados probando con curl, no
+  adivinados**: `NUMERIC`/`DECIMAL` (`monto`, `presupuesto`, los `SUM()` de
+  reportes) y `BIGINT` (los `COUNT()`) llegaban como *string*, no *number* —
+  rompia `.toFixed()` y las sumas en el front. Y `DATE` (`gastos.fecha`,
+  `viajes.fecha_inicio/fecha_fin`) llegaba como datetime con hora y zona
+  (`"2026-08-21T06:00:00.000Z"`) en vez de `"YYYY-MM-DD"`, rompiendo
+  `formatDate()` del front — justo lo que el comentario original en
+  `schema.sql` sobre por que `fecha` es `DATE` y no `TIMESTAMPTZ` queria
+  evitar. Los tres se arreglaron centralizados con `pg.types.setTypeParser`
+  en `src/config/database.js`, no parcheando cada query.
+- **Frontend**: capa `src/api/` nueva (fetch + token + manejo de 401),
+  `AuthContext`/`DataContext` conectados al backend real en vez de arrays
+  mock, `ComprobanteImage.jsx` nuevo para el patron fetch+blob que ya estaba
+  anotado abajo, y se corrigio un bug de `usuarioId` hardcodeado a `1` en 3
+  paginas del operador (rompia todo para cualquier operador que no fuera el
+  usuario id 1).
+- **Se quito `revertirGasto`** (el "Deshacer" del toast al aprobar/rechazar):
+  no hay endpoint de backend para revertir una aprobacion ya escrita en
+  `aprobaciones`, y no era parte del plan aprobado agregar uno. Si se
+  necesita, es un modulo de "reversion de aprobaciones" nuevo, no un fix.
+- **Deliberadamente fuera de alcance** (documentado, no olvidado): el campo
+  `factura` (segundo archivo) en `NuevoGasto.jsx` no se manda al backend —
+  solo hay columna para un comprobante. `Notificaciones.jsx` y los botones de
+  exportar Excel/PDF siguen mockeados (igual que ya estaba decidido para el
+  RF7). Avatar de perfil sigue siendo solo local (color/foto en localStorage).
+  Las paginas huerfanas `admin/GastosPendientes.jsx` y `admin/DetalleGasto.jsx`
+  (no estan en ninguna ruta) no se tocaron.
 
 ## De donde viene esto
 
@@ -120,8 +172,7 @@ hace, seria UUIDv7 y hay que tocar las 4 tablas y sus FKs.
 
 Ninguna de estas la menciono el revisor, pero salieron al auditar el codigo:
 
-- **CORS abierto.** `src/server.js` usa `app.use(cors())` sin restringir origen.
-  Para produccion hay que limitarlo al dominio del frontend.
+- ~~**CORS abierto.**~~ Hecho el 2026-08-23: restringido a `FRONTEND_URL`.
 - **Sin rate limiting en el login.** `POST /api/auth/login` acepta intentos
   ilimitados; se presta a fuerza bruta. `express-rate-limit` lo resuelve.
 - **El rol viaja en el JWT.** Si un admin degrada a un usuario, su token sigue

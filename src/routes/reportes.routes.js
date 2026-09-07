@@ -9,6 +9,7 @@ router.use(verificarToken, soloAdmin);
 router.get('/totales', reportesController.totales);
 router.get('/por-categoria', reportesController.porCategoria);
 router.get('/por-empleado', reportesController.porEmpleado);
+router.get('/por-mes', reportesController.porMes);
 router.get('/', reportesController.general);
 
 module.exports = router;

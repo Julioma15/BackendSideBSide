@@ -29,7 +29,10 @@ async function totales(req, res, next) {
          COALESCE(SUM(monto), 0) AS monto_total,
          SUM(CASE WHEN estado = 'aprobado' THEN 1 ELSE 0 END) AS aprobados,
          SUM(CASE WHEN estado = 'rechazado' THEN 1 ELSE 0 END) AS rechazados,
-         SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) AS pendientes
+         SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) AS pendientes,
+         COALESCE(SUM(CASE WHEN estado = 'aprobado' THEN monto ELSE 0 END), 0) AS monto_aprobado,
+         COALESCE(SUM(CASE WHEN estado = 'rechazado' THEN monto ELSE 0 END), 0) AS monto_rechazado,
+         COALESCE(SUM(CASE WHEN estado = 'pendiente' THEN monto ELSE 0 END), 0) AS monto_pendiente
        FROM gastos g
        ${where}`,
       params
@@ -81,6 +84,24 @@ async function porEmpleado(req, res, next) {
   }
 }
 
+async function porMes(req, res, next) {
+  try {
+    const { where, params } = filtrosPeriodo(req.query);
+    const [filas] = await pool.query(
+      `SELECT to_char(date_trunc('month', g.fecha), 'YYYY-MM') AS mes,
+              COUNT(*) AS cantidad, COALESCE(SUM(g.monto), 0) AS monto_total
+       FROM gastos g
+       ${where}
+       GROUP BY date_trunc('month', g.fecha)
+       ORDER BY date_trunc('month', g.fecha)`,
+      params
+    );
+    res.json(filas);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function general(req, res, next) {
   try {
     const { where, params } = filtrosPeriodo(req.query);
@@ -99,4 +120,4 @@ async function general(req, res, next) {
   }
 }
 
-module.exports = { totales, porCategoria, porEmpleado, general };
+module.exports = { totales, porCategoria, porEmpleado, porMes, general };
