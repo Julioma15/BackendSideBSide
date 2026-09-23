@@ -3,6 +3,18 @@ const { ROLES_VALIDOS, MONEDAS_VALIDAS } = require('../constants');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Minimo 8 caracteres, al menos una letra y al menos un numero. No exige
+// simbolos para no ser tan estricto como para frustrar al usuario final
+// (personal de campo, no siempre tecnico), pero evita contrasenas trivales
+// como "12345678" o "aaaaaaaa".
+const CONTRASENA_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+
+function validarFortalezaContrasena(contrasena) {
+  if (!contrasena || !CONTRASENA_REGEX.test(contrasena)) {
+    throw new AppError('La contrasena debe tener al menos 8 caracteres, con letras y numeros', 400);
+  }
+}
+
 function validarRegistro({ nombre, email, contrasena, rol }) {
   if (!nombre || nombre.trim().length < 2) {
     throw new AppError('El nombre es obligatorio', 400);
@@ -10,9 +22,7 @@ function validarRegistro({ nombre, email, contrasena, rol }) {
   if (!email || !EMAIL_REGEX.test(email)) {
     throw new AppError('El email no es valido', 400);
   }
-  if (!contrasena || contrasena.length < 8) {
-    throw new AppError('La contrasena debe tener al menos 8 caracteres', 400);
-  }
+  validarFortalezaContrasena(contrasena);
   if (rol && !ROLES_VALIDOS.includes(rol)) {
     throw new AppError('Rol invalido', 400);
   }
@@ -38,7 +48,7 @@ function validarUsuarioNuevo({ nombre, email, rol }) {
   }
 }
 
-function validarGasto({ monto, categoria_id, fecha, viaje_id, moneda }) {
+function validarGasto({ monto, categoria_id, fecha, viaje_id, moneda, iva }) {
   if (monto === undefined || isNaN(monto) || Number(monto) <= 0) {
     throw new AppError('El monto debe ser un numero mayor a 0', 400);
   }
@@ -53,6 +63,16 @@ function validarGasto({ monto, categoria_id, fecha, viaje_id, moneda }) {
   }
   if (moneda && !MONEDAS_VALIDAS.includes(moneda)) {
     throw new AppError('Moneda invalida', 400);
+  }
+  // El IVA es opcional (no toda factura lo desglosa) pero, si se manda, va
+  // incluido en el monto: no puede ser negativo ni superarlo.
+  if (iva !== undefined && iva !== null && iva !== '') {
+    if (isNaN(iva) || Number(iva) < 0) {
+      throw new AppError('El IVA debe ser un numero mayor o igual a 0', 400);
+    }
+    if (monto !== undefined && !isNaN(monto) && Number(iva) > Number(monto)) {
+      throw new AppError('El IVA no puede ser mayor al monto del gasto', 400);
+    }
   }
 }
 
@@ -93,4 +113,5 @@ module.exports = {
   validarGasto,
   validarRechazo,
   validarViaje,
+  validarFortalezaContrasena,
 };

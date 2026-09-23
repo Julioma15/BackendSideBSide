@@ -1,6 +1,6 @@
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
-const { ESTADOS_REGISTRO_VALIDOS } = require('../constants');
+const { ESTADOS_REGISTRO_VALIDOS, ESTADO_REGISTRO } = require('../constants');
 
 async function listar(req, res, next) {
   try {
@@ -72,4 +72,28 @@ async function actualizar(req, res, next) {
   }
 }
 
-module.exports = { listar, crear, actualizar };
+async function eliminar(req, res, next) {
+  try {
+    const { id } = req.params;
+    const [existentes] = await pool.query('SELECT id FROM categorias WHERE id = ?', [id]);
+    if (existentes.length === 0) {
+      throw new AppError('Categoria no encontrada', 404);
+    }
+
+    const [conteo] = await pool.query('SELECT COUNT(*) AS total FROM gastos WHERE categoria_id = ?', [id]);
+    if (Number(conteo[0].total) > 0) {
+      // Un DELETE fisico rompe la FK gastos.categoria_id en cuanto la
+      // categoria tenga algun gasto: se desactiva en su lugar, igual que
+      // usuarios.eliminar.
+      await pool.query('UPDATE categorias SET estado = ? WHERE id = ?', [ESTADO_REGISTRO.INACTIVO, id]);
+      return res.json({ mensaje: 'Categoria en uso: se desactivo en lugar de eliminarse' });
+    }
+
+    await pool.query('DELETE FROM categorias WHERE id = ?', [id]);
+    res.json({ mensaje: 'Categoria eliminada' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listar, crear, actualizar, eliminar };

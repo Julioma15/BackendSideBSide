@@ -1,7 +1,8 @@
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { validarRechazo } = require('../utils/validations');
-const { ESTADO_GASTO, ESTADO_APROBACION } = require('../constants');
+const { ESTADO_GASTO, ESTADO_APROBACION, TIPO_NOTIFICACION } = require('../constants');
+const { crearNotificacion } = require('../utils/notificaciones');
 
 async function listarPendientes(req, res, next) {
   try {
@@ -66,6 +67,12 @@ async function aprobar(req, res, next) {
       'INSERT INTO aprobaciones (gasto_id, admin_id, comentario, estado) VALUES (?, ?, ?, ?)',
       [gasto.id, req.user.id, req.body.comentario || null, ESTADO_APROBACION.APROBADO]
     );
+    await crearNotificacion(conexion, {
+      usuario_id: gasto.usuario_id,
+      tipo: TIPO_NOTIFICACION.APROBADO,
+      titulo: `Gasto aprobado — $${Number(gasto.monto).toFixed(2)}`,
+      detalle: gasto.descripcion,
+    });
     await conexion.commit();
 
     res.json({ mensaje: 'Gasto aprobado' });
@@ -89,6 +96,12 @@ async function rechazar(req, res, next) {
       'INSERT INTO aprobaciones (gasto_id, admin_id, comentario, estado) VALUES (?, ?, ?, ?)',
       [gasto.id, req.user.id, req.body.comentario, ESTADO_APROBACION.RECHAZADO]
     );
+    await crearNotificacion(conexion, {
+      usuario_id: gasto.usuario_id,
+      tipo: TIPO_NOTIFICACION.RECHAZADO,
+      titulo: `Gasto rechazado — $${Number(gasto.monto).toFixed(2)}`,
+      detalle: `Motivo: ${req.body.comentario}`,
+    });
     await conexion.commit();
 
     res.json({ mensaje: 'Gasto rechazado' });

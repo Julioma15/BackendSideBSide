@@ -20,6 +20,9 @@ CREATE TABLE usuarios (
   estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
   empresa VARCHAR(100),
   num_empleado VARCHAR(30),
+  reset_token VARCHAR(64),
+  reset_token_expira TIMESTAMPTZ,
+  zona_horaria VARCHAR(50) NOT NULL DEFAULT 'America/Mexico_City',
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -57,6 +60,15 @@ CREATE TABLE viajes (
 -- `viaje_id` es nullable a nivel de columna (evita romper migraciones sobre
 -- bases con gastos ya creados) pero se exige en `validarGasto` para todo
 -- gasto nuevo.
+--
+-- `iva` es el IVA pagado dentro de `monto` (no se suma aparte), para que el
+-- admin lo vea desglosado al revisar/aprobar. Default 0 porque no todos los
+-- gastos tienen factura con IVA desglosado.
+--
+-- El CFDI (factura fiscal mexicana) trae dos archivos con validez distinta:
+-- `factura_url` es el PDF/imagen (representacion legible), `factura_xml_url`
+-- es el XML (el documento con validez fiscal). El formulario los pide como
+-- dos campos de carga separados.
 
 CREATE TABLE gastos (
   id SERIAL PRIMARY KEY,
@@ -64,10 +76,13 @@ CREATE TABLE gastos (
   categoria_id INT NOT NULL REFERENCES categorias(id),
   viaje_id INT REFERENCES viajes(id),
   monto DECIMAL(10, 2) NOT NULL,
+  iva DECIMAL(10, 2) NOT NULL DEFAULT 0,
   moneda VARCHAR(3) NOT NULL DEFAULT 'MXN',
   descripcion TEXT,
   ubicacion VARCHAR(255),
   foto_url VARCHAR(255),
+  factura_url VARCHAR(255),
+  factura_xml_url VARCHAR(255),
   estado VARCHAR(20) NOT NULL DEFAULT 'borrador'
     CHECK (estado IN ('borrador', 'pendiente', 'aprobado', 'rechazado')),
   fecha DATE NOT NULL,
@@ -85,6 +100,20 @@ CREATE TABLE aprobaciones (
   -- validations.js, pero aqui queda blindada contra cualquier ruta futura.
   CONSTRAINT rechazo_requiere_comentario
     CHECK (estado <> 'rechazado' OR btrim(coalesce(comentario, '')) <> '')
+);
+
+-- Notificaciones generadas por el backend: gasto aprobado/rechazado (para el
+-- dueno del gasto), gasto nuevo pendiente (fan-out a todos los admins
+-- activos) y viaje nuevo asignado (para el operador). No hay endpoint de
+-- escritura publico, solo lectura y marcar-como-leida de las propias filas.
+CREATE TABLE notificaciones (
+  id SERIAL PRIMARY KEY,
+  usuario_id INT NOT NULL REFERENCES usuarios(id),
+  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('aprobado', 'rechazado', 'pendiente', 'viaje', 'info')),
+  titulo VARCHAR(255) NOT NULL,
+  detalle VARCHAR(500),
+  leido BOOLEAN NOT NULL DEFAULT false,
+  fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Categorias por defecto
