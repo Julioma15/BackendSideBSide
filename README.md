@@ -73,6 +73,26 @@ curl -X PUT http://localhost:5000/api/gastos/1/aprobar -H "Authorization: Bearer
 curl http://localhost:5000/api/reportes/por-categoria -H "Authorization: Bearer $TOKEN"
 ```
 
+## Pruebas automatizadas
+
+```bash
+npm test
+```
+
+Pruebas de la API (`tests/*.test.js`, con `node:test` + `supertest`): login,
+permisos por rol, aislamiento entre operadores, validaciones de gastos, el flujo
+de aprobacion/rechazo con sus notificaciones, y que `monto`/`fecha` lleguen con
+el tipo correcto (regresion de los bugs de `pg`).
+
+Corren contra una base aparte, `sidebside_test`, que se crea sola y se borra y
+recrea desde `sql/schema.sql` en cada archivo de pruebas. Usa el mismo
+usuario/contrasena de Postgres del `.env`. El script se niega a correr si la
+base no termina en `_test`, para no borrar nunca la de desarrollo. Las pruebas
+no mandan correos ni usan Gemini aunque el `.env` tenga credenciales.
+
+Las E2E con navegador (Playwright) viven en el frontend: `npm run test:e2e`
+en `sidebside-frontend/`.
+
 ## Notas de alcance (MVP)
 
 - Fotos de comprobantes se guardan localmente en `uploads/`, pero **no se sirven como

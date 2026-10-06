@@ -57,6 +57,7 @@ async function verificarConexion() {
   cliente.release();
 }
 
-const pool = { query, getConnection };
+// end(): lo usan las pruebas para cerrar las conexiones y que el proceso termine.
+const pool = { query, getConnection, end: () => poolPg.end() };
 
 module.exports = { pool, verificarConexion };
