@@ -20,6 +20,16 @@ const notificacionesRoutes = require('./routes/notificaciones.routes');
 
 const app = express();
 
+// En produccion la app corre detras de Caddy (proxy inverso con HTTPS), asi
+// que la IP del cliente llega en X-Forwarded-For. Sin esto, express-rate-limit
+// ve a TODOS los usuarios con la IP del proxy: 10 contrasenas mal escritas
+// entre todos bloquearian el login de la empresa entera. Va por variable y no
+// fija porque sin proxy delante (desarrollo) confiar en ese header dejaria a
+// cualquiera falsear su IP y saltarse los limites.
+if (process.env.TRUST_PROXY) {
+  app.set('trust proxy', Number(process.env.TRUST_PROXY));
+}
+
 // crossOriginResourcePolicy 'cross-origin': el frontend (otro origen) carga
 // comprobantes/facturas como <img>/blob directo de la API; el default de
 // helmet ('same-origin') los bloquearia con un 403 silencioso en el browser.

@@ -33,18 +33,48 @@ function getTransporter() {
   return transporter;
 }
 
-// Si no hay SMTP configurado (dev sin credenciales todavia), no truena el
-// flujo completo: solo lo deja en el log para que se pueda probar sin correo
-// real. En produccion SMTP_HOST/USER/PASS son obligatorias.
+// Produccion: Resend por HTTPS. DigitalOcean bloquea los puertos SMTP
+// (25/465/587) en los Droplets, asi que Gmail por SMTP no sale desde el
+// servidor; una API HTTP no tiene ese problema y, con el dominio propio
+// verificado (SPF/DKIM en Porkbun), los correos llegan como
+// no-reply@<dominio> y no caen en spam.
+async function enviarConResend({ to, subject, html }) {
+  const attachments = tieneLogo()
+    ? [{ filename: 'logo-correo.png', content: fs.readFileSync(LOGO_PATH).toString('base64'), content_id: LOGO_CID }]
+    : [];
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: process.env.EMAIL_FROM, to, subject, html, attachments }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '');
+    throw new Error(`Resend respondio ${res.status}: ${detalle}`);
+  }
+}
+
+// Orden: Resend (produccion) -> SMTP (desarrollo local con Gmail) -> solo log.
+// Si no hay nada configurado (dev sin credenciales, pruebas) no truena el
+// flujo completo: solo lo deja en el log para poder probar sin correo real.
 async function enviarCorreo({ to, subject, html }) {
+  if (process.env.RESEND_API_KEY) {
+    return enviarConResend({ to, subject, html });
+  }
+
   const t = getTransporter();
   if (!t) {
-    console.warn(`[email] SMTP no configurado. Correo NO enviado a ${to}: ${subject}`);
+    console.warn(`[email] Correo no configurado. NO enviado a ${to}: ${subject}`);
     return;
   }
 
   await t.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
     html,
