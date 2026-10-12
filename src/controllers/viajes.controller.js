@@ -20,6 +20,20 @@ async function crear(req, res, next) {
 
     await conexion.beginTransaction();
 
+    // Bloquea la fila del operador mientras dura la transaccion: si llegan dos
+    // altas iguales casi al mismo tiempo (doble clic), la segunda espera a que
+    // la primera haga commit y entonces si ve el duplicado.
+    await conexion.query('SELECT id FROM usuarios WHERE id = ? FOR UPDATE', [usuario_id]);
+    const [duplicados] = await conexion.query(
+      `SELECT id FROM viajes
+       WHERE usuario_id = ? AND LOWER(TRIM(nombre)) = LOWER(TRIM(?))
+         AND fecha_inicio = ? AND fecha_fin = ? AND estado <> ?`,
+      [usuario_id, nombre, fecha_inicio, fecha_fin, ESTADO_VIAJE.CANCELADO]
+    );
+    if (duplicados.length > 0) {
+      throw new AppError('Ya existe este viaje para ese operador con las mismas fechas', 409);
+    }
+
     const [resultado] = await conexion.query(
       `INSERT INTO viajes (nombre, usuario_id, fecha_inicio, fecha_fin, presupuesto)
        VALUES (?, ?, ?, ?, ?) RETURNING id`,
@@ -35,35 +49,33 @@ async function crear(req, res, next) {
 
     await conexion.commit();
 
-    // El correo va DESPUES del commit y en su propio try/catch: el viaje ya
-    // quedo asignado (que es lo que realmente importa) y un problema de SMTP
-    // no deberia tumbar la respuesta 201 ni, mucho menos, deshacer el viaje.
-    try {
-      await enviarCorreo({
-        to: operador.email,
-        subject: `Nuevo viaje asignado: ${nombre}`,
-        html: plantillaCorreo({
-          titulo: `Se te asignó un nuevo viaje 🧳`,
-          cuerpoHtml: `
-            <p style="margin:0 0 16px;">Hola ${operador.nombre.split(' ')[0]},</p>
-            <p style="margin:0 0 20px;">Tu administrador te asignó un nuevo viaje. Este es el resumen:</p>
-            <div style="background-color:#f9fafb;border:1px solid #eef0f3;border-radius:12px;padding:18px 20px;margin:0 0 20px;">
-              <p style="margin:0 0 10px;font-size:16px;font-weight:bold;color:#1a2456;">${nombre}</p>
-              <p style="margin:0 0 4px;"><strong>Fechas:</strong> ${fecha_inicio} → ${fecha_fin}</p>
-              <p style="margin:0;"><strong>Presupuesto:</strong> ${presupuesto > 0 ? `$${Number(presupuesto).toFixed(2)}` : 'Sin presupuesto asignado'}</p>
-            </div>
-            <p style="margin:0 0 20px;text-align:center;">
-              <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:10px;">Ver mis viajes</a>
-            </p>
-            <p style="margin:0;color:#6b7280;font-size:13px;">Ya puedes empezar a registrar tus gastos de este viaje desde la plataforma.</p>
-          `,
-        }),
-      });
-    } catch (errCorreo) {
-      console.warn(`[email] No se pudo enviar el correo de viaje asignado a ${operador.email}:`, errCorreo.message);
-    }
-
     res.status(201).json({ id: resultado[0].id });
+
+    // El correo va DESPUES del commit y de responder, sin await: el viaje ya
+    // quedo asignado (que es lo que realmente importa) y un SMTP lento o con
+    // error no deberia dejar al admin esperando ni tumbar la respuesta 201.
+    enviarCorreo({
+      to: operador.email,
+      subject: `Nuevo viaje asignado: ${nombre}`,
+      html: plantillaCorreo({
+        titulo: `Se te asignó un nuevo viaje 🧳`,
+        cuerpoHtml: `
+          <p style="margin:0 0 16px;">Hola ${operador.nombre.split(' ')[0]},</p>
+          <p style="margin:0 0 20px;">Tu administrador te asignó un nuevo viaje. Este es el resumen:</p>
+          <div style="background-color:#f9fafb;border:1px solid #eef0f3;border-radius:12px;padding:18px 20px;margin:0 0 20px;">
+            <p style="margin:0 0 10px;font-size:16px;font-weight:bold;color:#1a2456;">${nombre}</p>
+            <p style="margin:0 0 4px;"><strong>Fechas:</strong> ${fecha_inicio} → ${fecha_fin}</p>
+            <p style="margin:0;"><strong>Presupuesto:</strong> ${presupuesto > 0 ? `$${Number(presupuesto).toFixed(2)}` : 'Sin presupuesto asignado'}</p>
+          </div>
+          <p style="margin:0 0 20px;text-align:center;">
+            <a href="${process.env.FRONTEND_URL}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:10px;">Ver mis viajes</a>
+          </p>
+          <p style="margin:0;color:#6b7280;font-size:13px;">Ya puedes empezar a registrar tus gastos de este viaje desde la plataforma.</p>
+        `,
+      }),
+    }).catch((errCorreo) => {
+      console.warn(`[email] No se pudo enviar el correo de viaje asignado a ${operador.email}:`, errCorreo.message);
+    });
   } catch (err) {
     await conexion.rollback();
     next(err);
@@ -137,6 +149,9 @@ async function actualizar(req, res, next) {
     if (estado && !ESTADOS_VIAJE_VALIDOS.includes(estado)) {
       throw new AppError('Estado invalido', 400);
     }
+    if (viaje.estado === ESTADO_VIAJE.CANCELADO) {
+      throw new AppError('Un viaje cancelado ya no se puede modificar', 400);
+    }
 
     await conexion.beginTransaction();
 
@@ -159,6 +174,13 @@ async function actualizar(req, res, next) {
         tipo: TIPO_NOTIFICACION.VIAJE,
         titulo: `Viaje completado: ${nombre || viaje.nombre}`,
         detalle: 'Tu administrador marco este viaje como completado.',
+      });
+    } else if (estado && estado !== viaje.estado && estado === ESTADO_VIAJE.CANCELADO) {
+      await crearNotificacion(conexion, {
+        usuario_id: viaje.usuario_id,
+        tipo: TIPO_NOTIFICACION.VIAJE,
+        titulo: `Viaje cancelado: ${viaje.nombre}`,
+        detalle: 'Tu administrador cancelo este viaje. Ya no puedes registrar gastos en el.',
       });
     } else if (
       (nombre && nombre !== viaje.nombre) ||
@@ -185,4 +207,43 @@ async function actualizar(req, res, next) {
   }
 }
 
-module.exports = { crear, listar, obtenerUno, actualizar, obtenerViajeOAutorizar };
+// Pensado para viajes creados por error. Solo se borra si no tiene gastos (de
+// ningun estado, incluidos borradores que el admin no ve): con gastos se
+// perderia el registro del dinero, asi que en ese caso hay que cancelarlo.
+async function eliminar(req, res, next) {
+  const conexion = await pool.getConnection();
+  try {
+    const viaje = await obtenerViajeOAutorizar(req.params.id, req.user);
+
+    await conexion.beginTransaction();
+
+    const [gastos] = await conexion.query('SELECT COUNT(*) AS total FROM gastos WHERE viaje_id = ?', [viaje.id]);
+    if (gastos[0].total > 0) {
+      throw new AppError(
+        `Este viaje tiene ${gastos[0].total} gasto(s) registrado(s) y no se puede eliminar. Puedes cancelarlo.`,
+        409
+      );
+    }
+
+    await conexion.query('DELETE FROM viajes WHERE id = ?', [viaje.id]);
+
+    if (viaje.estado === ESTADO_VIAJE.ACTIVO) {
+      await crearNotificacion(conexion, {
+        usuario_id: viaje.usuario_id,
+        tipo: TIPO_NOTIFICACION.VIAJE,
+        titulo: `Viaje eliminado: ${viaje.nombre}`,
+        detalle: 'Tu administrador elimino este viaje.',
+      });
+    }
+
+    await conexion.commit();
+    res.json({ mensaje: 'Viaje eliminado' });
+  } catch (err) {
+    await conexion.rollback().catch(() => {});
+    next(err);
+  } finally {
+    conexion.release();
+  }
+}
+
+module.exports = { crear, listar, obtenerUno, actualizar, eliminar, obtenerViajeOAutorizar };

@@ -10,5 +10,6 @@ router.post('/', soloAdmin, viajesController.crear);
 router.get('/', viajesController.listar);
 router.get('/:id', viajesController.obtenerUno);
 router.put('/:id', soloAdmin, viajesController.actualizar);
+router.delete('/:id', soloAdmin, viajesController.eliminar);
 
 module.exports = router;

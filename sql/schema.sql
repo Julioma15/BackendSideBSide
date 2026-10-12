@@ -45,7 +45,7 @@ CREATE TABLE viajes (
   fecha_inicio DATE NOT NULL,
   fecha_fin DATE NOT NULL,
   presupuesto DECIMAL(10, 2) NOT NULL,
-  estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'completado')),
+  estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'completado', 'cancelado')),
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

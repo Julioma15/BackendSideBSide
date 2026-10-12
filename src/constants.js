@@ -35,6 +35,9 @@ const ESTADO_REGISTRO = {
 const ESTADO_VIAJE = {
   ACTIVO: 'activo',
   COMPLETADO: 'completado',
+  // Para viajes que ya tienen gastos y no se pueden borrar sin perder ese
+  // registro (ver viajes.controller eliminar).
+  CANCELADO: 'cancelado',
 };
 
 const MONEDAS_VALIDAS = ['MXN', 'USD', 'EUR'];

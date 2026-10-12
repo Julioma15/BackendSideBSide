@@ -1,7 +1,10 @@
 const { AppError } = require('../middleware/errorHandler');
 const { ROLES_VALIDOS, MONEDAS_VALIDAS } = require('../constants');
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Solo caracteres que de verdad aparecen en emails reales. El patron anterior
+// ([^\s@]) dejaba pasar ";", ",", "<" o comillas: "ada@;x;a.com" se guardaba
+// y luego nodemailer lo partia en "ada@" y Gmail rechazaba el envio.
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
 // Minimo 8 caracteres, al menos una letra y al menos un numero. No exige
 // simbolos para no ser tan estricto como para frustrar al usuario final

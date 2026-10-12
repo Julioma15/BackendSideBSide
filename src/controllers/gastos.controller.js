@@ -2,7 +2,7 @@ const path = require('path');
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
 const { validarGasto } = require('../utils/validations');
-const { ESTADO_GASTO, ROL, ESTADOS_EDITABLES, TIPO_NOTIFICACION } = require('../constants');
+const { ESTADO_GASTO, ROL, ESTADOS_EDITABLES, TIPO_NOTIFICACION, ESTADO_VIAJE } = require('../constants');
 const { crearNotificacionAdmins } = require('../utils/notificaciones');
 const { extraerDatosRecibo, ErrorExtraccion } = require('../utils/extraerRecibo');
 
@@ -50,13 +50,16 @@ async function crear(req, res, next) {
     const { monto, categoria_id, descripcion, fecha, enviar, viaje_id, moneda, ubicacion, iva } = req.body;
     const estado = enviar ? ESTADO_GASTO.PENDIENTE : ESTADO_GASTO.BORRADOR;
 
-    const [viajes] = await pool.query('SELECT usuario_id FROM viajes WHERE id = ?', [viaje_id]);
+    const [viajes] = await pool.query('SELECT usuario_id, estado FROM viajes WHERE id = ?', [viaje_id]);
     const viaje = viajes[0];
     if (!viaje) {
       throw new AppError('El viaje no existe', 404);
     }
     if (req.user.rol !== ROL.ADMIN && viaje.usuario_id !== req.user.id) {
       throw new AppError('No tienes permiso sobre ese viaje', 403);
+    }
+    if (viaje.estado !== ESTADO_VIAJE.ACTIVO) {
+      throw new AppError(`Este viaje esta ${viaje.estado} y ya no acepta gastos nuevos`, 400);
     }
 
     await conexion.beginTransaction();

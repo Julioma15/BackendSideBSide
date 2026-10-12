@@ -74,3 +74,21 @@ describe('usuarios desactivados', () => {
     assert.equal(res.status, 403);
   });
 });
+
+describe('alta de usuarios por el admin', () => {
+  // Caso real: "ada@;ald;a.com" pasaba la validacion, se guardaba y luego
+  // nodemailer lo partia en "ada@"; Gmail lo rechazaba, la peticion daba 500
+  // y el usuario quedaba creado a medias.
+  for (const email of ['ada@;ald;a.com', 'ada@', 'a,b@x.com', 'a@b.c']) {
+    test(`rechaza email invalido "${email}" con 400 y no lo guarda`, async () => {
+      const res = await api()
+        .post('/api/usuarios')
+        .set('Authorization', `Bearer ${tokens.admin}`)
+        .send({ nombre: 'Prueba Email', email });
+      assert.equal(res.status, 400);
+
+      const lista = await api().get('/api/usuarios').set('Authorization', `Bearer ${tokens.admin}`);
+      assert.ok(!lista.body.some((u) => u.email === email));
+    });
+  }
+});
