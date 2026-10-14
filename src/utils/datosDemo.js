@@ -6,7 +6,9 @@
 //   node src/utils/datosDemo.js crear "ContrasenaDemo2026"
 //   node src/utils/datosDemo.js borrar
 //
-// Todo lo demo se reconoce por el dominio de los correos (@demo.side-b-side.com).
+// Lo demo se reconoce por la lista exacta de correos (EMAILS_DEMO), cortos a
+// proposito para escribirlos rapido en una presentacion. Son del dominio propio
+// para que un "olvide mi contrasena" nunca mande correo a un dominio ajeno.
 // "borrar" quita esos usuarios y todo lo que sea suyo, incluido lo que se haya
 // creado con ellos durante la presentacion, y sus archivos en uploads/.
 
@@ -17,17 +19,17 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
 const { validarFortalezaContrasena } = require('./validations');
 
-const DOMINIO = 'demo.side-b-side.com';
-const PATRON_EMAIL = `%@${DOMINIO}`;
+const DOMINIO = 'side-b-side.com';
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads');
 
-const ADMIN = { nombre: 'Laura Méndez', email: `laura.mendez@${DOMINIO}`, num: 'ADM-01' };
+const ADMIN = { nombre: 'Laura Méndez', email: `laura@${DOMINIO}`, num: 'ADM-01' };
 const OPERADORES = [
-  { clave: 'carlos', nombre: 'Carlos Ramírez', email: `carlos.ramirez@${DOMINIO}`, num: 'OP-101' },
-  { clave: 'ana', nombre: 'Ana Torres', email: `ana.torres@${DOMINIO}`, num: 'OP-102' },
-  { clave: 'miguel', nombre: 'Miguel Hernández', email: `miguel.hernandez@${DOMINIO}`, num: 'OP-103' },
-  { clave: 'sofia', nombre: 'Sofía Castillo', email: `sofia.castillo@${DOMINIO}`, num: 'OP-104' },
+  { clave: 'carlos', nombre: 'Carlos Ramírez', email: `carlos@${DOMINIO}`, num: 'OP-101' },
+  { clave: 'ana', nombre: 'Ana Torres', email: `ana@${DOMINIO}`, num: 'OP-102' },
+  { clave: 'miguel', nombre: 'Miguel Hernández', email: `miguel@${DOMINIO}`, num: 'OP-103' },
+  { clave: 'sofia', nombre: 'Sofía Castillo', email: `sofia@${DOMINIO}`, num: 'OP-104' },
 ];
+const EMAILS_DEMO = [ADMIN.email, ...OPERADORES.map((o) => o.email)];
 
 // Fechas relativas a "hoy" en Merida, para que la demo se vea al dia sin
 // importar cuando se corra. dia = desplazamiento en dias desde hoy.
@@ -178,7 +180,7 @@ function ticketSvg({ comercio, concepto, ubicacion, fecha, hora, monto, iva, fol
 async function crear(contrasena) {
   validarFortalezaContrasena(contrasena);
 
-  const [existentes] = await pool.query('SELECT COUNT(*)::int AS n FROM usuarios WHERE email LIKE ?', [PATRON_EMAIL]);
+  const [existentes] = await pool.query('SELECT COUNT(*)::int AS n FROM usuarios WHERE email = ANY(?)', [EMAILS_DEMO]);
   if (existentes[0].n > 0) {
     throw new Error('Ya hay datos demo. Corre primero: node src/utils/datosDemo.js borrar');
   }
@@ -305,7 +307,11 @@ async function borrar() {
   try {
     await conexion.beginTransaction();
 
-    const [usuarios] = await conexion.query('SELECT id FROM usuarios WHERE email LIKE ?', [PATRON_EMAIL]);
+    const [usuarios] = await conexion.query(
+      // El LIKE cubre la primera version del script, que usaba @demo.side-b-side.com.
+      "SELECT id FROM usuarios WHERE email = ANY(?) OR email LIKE '%@demo.side-b-side.com'",
+      [EMAILS_DEMO]
+    );
     const ids = usuarios.map((u) => u.id);
     if (ids.length === 0) {
       await conexion.rollback();
