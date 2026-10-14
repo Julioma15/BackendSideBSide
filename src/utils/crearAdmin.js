@@ -6,9 +6,11 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
 const { ROL } = require('../constants');
+const { normalizarEmail } = require('./validations');
 
 async function main() {
-  const [nombre, email, contrasena] = process.argv.slice(2);
+  const [nombre, emailCrudo, contrasena] = process.argv.slice(2);
+  const email = normalizarEmail(emailCrudo);
 
   if (!nombre || !email || !contrasena) {
     console.error('Uso: node src/utils/crearAdmin.js "Nombre Admin" admin@empresa.mx contrasena123');

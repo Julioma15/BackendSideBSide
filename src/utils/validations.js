@@ -6,6 +6,14 @@ const { ROLES_VALIDOS, MONEDAS_VALIDAS } = require('../constants');
 // y luego nodemailer lo partia en "ada@" y Gmail rechazaba el envio.
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
+// Los correos se guardan y se buscan siempre en minusculas y sin espacios:
+// el celular pone la primera letra en mayuscula sola ("Juan@..."), y sin
+// esto ese usuario no podia entrar escribiendo "juan@...". Se aplica en cada
+// endpoint que recibe un email, antes de validarlo.
+function normalizarEmail(email) {
+  return typeof email === 'string' ? email.trim().toLowerCase() : email;
+}
+
 // Minimo 8 caracteres, al menos una letra y al menos un numero. No exige
 // simbolos para no ser tan estricto como para frustrar al usuario final
 // (personal de campo, no siempre tecnico), pero evita contrasenas trivales
@@ -110,6 +118,7 @@ function validarViaje({ nombre, usuario_id, fecha_inicio, fecha_fin, presupuesto
 }
 
 module.exports = {
+  normalizarEmail,
   validarRegistro,
   validarLogin,
   validarUsuarioNuevo,

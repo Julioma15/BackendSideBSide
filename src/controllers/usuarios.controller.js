@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
-const { validarUsuarioNuevo } = require('../utils/validations');
+const { normalizarEmail, validarUsuarioNuevo } = require('../utils/validations');
 const { ROL, ESTADO_REGISTRO } = require('../constants');
 const { enviarCorreo } = require('../utils/email');
 const { plantillaCorreo } = require('../utils/emailTemplate');
@@ -24,6 +24,7 @@ async function listar(req, res, next) {
 async function crear(req, res, next) {
   const conexion = await pool.getConnection();
   try {
+    req.body.email = normalizarEmail(req.body.email);
     validarUsuarioNuevo(req.body);
     const { nombre, email, rol, num_empleado } = req.body;
 

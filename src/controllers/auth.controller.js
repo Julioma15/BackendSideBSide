@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/database');
 const { AppError } = require('../middleware/errorHandler');
-const { validarRegistro, validarLogin, validarFortalezaContrasena } = require('../utils/validations');
+const { normalizarEmail, validarRegistro, validarLogin, validarFortalezaContrasena } = require('../utils/validations');
 const { ROL, ESTADO_REGISTRO } = require('../constants');
 const { enviarCorreo } = require('../utils/email');
 const { plantillaCorreo } = require('../utils/emailTemplate');
@@ -21,6 +21,7 @@ function generarToken(usuario) {
 
 async function register(req, res, next) {
   try {
+    req.body.email = normalizarEmail(req.body.email);
     validarRegistro(req.body);
     const { nombre, email, contrasena, rol, empresa } = req.body;
 
@@ -48,6 +49,7 @@ async function register(req, res, next) {
 
 async function login(req, res, next) {
   try {
+    req.body.email = normalizarEmail(req.body.email);
     validarLogin(req.body);
     const { email, contrasena } = req.body;
 
@@ -122,7 +124,7 @@ async function cambiarContrasena(req, res, next) {
 // el email (evita que alguien use este endpoint para enumerar cuentas).
 async function olvideContrasena(req, res, next) {
   try {
-    const { email } = req.body;
+    const email = normalizarEmail(req.body.email);
     if (!email) {
       throw new AppError('El correo es obligatorio', 400);
     }

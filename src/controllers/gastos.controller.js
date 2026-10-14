@@ -43,6 +43,20 @@ async function extraerRecibo(req, res, next) {
   }
 }
 
+// Un gasto puede registrarse antes de que empiece el viaje (pagos por
+// adelantado, como el hotel), pero su fecha tiene que caer dentro del viaje.
+// Las fechas son DATE y llegan como 'YYYY-MM-DD' (ver database.js), asi que
+// se comparan como texto sin pasar por Date ni husos horarios.
+function validarFechaEnViaje(fecha, viaje) {
+  const dia = String(fecha).slice(0, 10);
+  if (dia < viaje.fecha_inicio || dia > viaje.fecha_fin) {
+    throw new AppError(
+      `La fecha del gasto debe estar dentro del viaje (del ${viaje.fecha_inicio} al ${viaje.fecha_fin})`,
+      400
+    );
+  }
+}
+
 async function crear(req, res, next) {
   const conexion = await pool.getConnection();
   try {
@@ -50,7 +64,10 @@ async function crear(req, res, next) {
     const { monto, categoria_id, descripcion, fecha, enviar, viaje_id, moneda, ubicacion, iva } = req.body;
     const estado = enviar ? ESTADO_GASTO.PENDIENTE : ESTADO_GASTO.BORRADOR;
 
-    const [viajes] = await pool.query('SELECT usuario_id, estado FROM viajes WHERE id = ?', [viaje_id]);
+    const [viajes] = await pool.query(
+      'SELECT usuario_id, estado, fecha_inicio, fecha_fin FROM viajes WHERE id = ?',
+      [viaje_id]
+    );
     const viaje = viajes[0];
     if (!viaje) {
       throw new AppError('El viaje no existe', 404);
@@ -61,6 +78,7 @@ async function crear(req, res, next) {
     if (viaje.estado !== ESTADO_VIAJE.ACTIVO) {
       throw new AppError(`Este viaje esta ${viaje.estado} y ya no acepta gastos nuevos`, 400);
     }
+    validarFechaEnViaje(fecha, viaje);
 
     await conexion.beginTransaction();
 
@@ -198,6 +216,11 @@ async function actualizar(req, res, next) {
 
     const { monto, categoria_id, descripcion, fecha, enviar, moneda, ubicacion, iva } = req.body;
     const estado = enviar ? ESTADO_GASTO.PENDIENTE : gasto.estado;
+
+    if (fecha && gasto.viaje_id) {
+      const [viajes] = await pool.query('SELECT fecha_inicio, fecha_fin FROM viajes WHERE id = ?', [gasto.viaje_id]);
+      validarFechaEnViaje(fecha, viajes[0]);
+    }
 
     await conexion.beginTransaction();
 

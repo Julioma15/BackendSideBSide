@@ -44,6 +44,36 @@ describe('crear gasto', () => {
     });
   }
 
+  // El viaje de prueba va del 2026-10-01 al 2026-10-05 (helpers.crearViaje).
+  for (const fecha of ['2026-09-30', '2026-10-06']) {
+    test(`rechaza fecha ${fecha} fuera del viaje con 400`, async () => {
+      const res = await api().post('/api/gastos').set(como(tokens.operador)).send(gastoValido(viajeOperador, { fecha }));
+      assert.equal(res.status, 400);
+      assert.match(res.body.error, /dentro del viaje/);
+    });
+  }
+
+  test('acepta los dias de inicio y fin del viaje', async () => {
+    for (const fecha of ['2026-10-01', '2026-10-05']) {
+      const res = await api().post('/api/gastos').set(como(tokens.operador)).send(gastoValido(viajeOperador, { fecha }));
+      assert.equal(res.status, 201, fecha);
+    }
+  });
+
+  test('un viaje que aun no empieza acepta gastos con fecha dentro del viaje (pago adelantado)', async () => {
+    const futuro = await crearViaje(tokens.admin, await idDe('operador', tokens.admin), {
+      nombre: 'Viaje Futuro', fecha_inicio: '2030-01-10', fecha_fin: '2030-01-12',
+    });
+    const res = await api().post('/api/gastos').set(como(tokens.operador)).send(gastoValido(futuro, { fecha: '2030-01-10' }));
+    assert.equal(res.status, 201);
+  });
+
+  test('editar un gasto no puede sacar su fecha del viaje', async () => {
+    const creado = await api().post('/api/gastos').set(como(tokens.operador)).send(gastoValido(viajeOperador, { enviar: false }));
+    const res = await api().put(`/api/gastos/${creado.body.id}`).set(como(tokens.operador)).send({ fecha: '2026-12-25' });
+    assert.equal(res.status, 400);
+  });
+
   test('operador no puede cargar gastos al viaje de otro', async () => {
     const res = await api().post('/api/gastos').set(como(tokens.operador)).send(gastoValido(viajeOperador2));
     assert.equal(res.status, 403);

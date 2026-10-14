@@ -23,6 +23,13 @@ describe('login', () => {
     assert.match(res.body.error, /contrasena no es correcta/i);
   });
 
+  test('el correo con mayusculas o espacios entra igual (el celular capitaliza)', async () => {
+    const { email, contrasena } = USUARIOS_PRUEBA.admin;
+    const conMayusculas = `  ${email[0].toUpperCase()}${email.slice(1).toUpperCase()} `;
+    const res = await api().post('/api/auth/login').send({ email: conMayusculas, contrasena });
+    assert.equal(res.status, 200);
+  });
+
   test('correo inexistente da 404', async () => {
     const res = await api().post('/api/auth/login').send({ email: 'nadie@test.local', contrasena: 'Algo12345' });
     assert.equal(res.status, 404);
@@ -91,4 +98,18 @@ describe('alta de usuarios por el admin', () => {
       assert.ok(!lista.body.some((u) => u.email === email));
     });
   }
+
+  test('guarda el correo en minusculas y no deja duplicarlo con otras mayusculas', async () => {
+    const crear = (email) => api()
+      .post('/api/usuarios')
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ nombre: 'Prueba Mayusculas', email });
+
+    const res = await crear(' Mayus.Prueba@Test.Local ');
+    assert.equal(res.status, 201);
+    assert.equal(res.body.email, 'mayus.prueba@test.local');
+
+    const repetido = await crear('mayus.prueba@test.local');
+    assert.equal(repetido.status, 409);
+  });
 });

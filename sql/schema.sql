@@ -14,7 +14,7 @@
 CREATE TABLE usuarios (
   id SERIAL PRIMARY KEY,
   nombre VARCHAR(100) NOT NULL,
-  email VARCHAR(100) UNIQUE NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL CONSTRAINT usuarios_email_minusculas CHECK (email = LOWER(email)),
   contrasena VARCHAR(255) NOT NULL,
   rol VARCHAR(20) NOT NULL DEFAULT 'operador' CHECK (rol IN ('operador', 'admin')),
   estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
