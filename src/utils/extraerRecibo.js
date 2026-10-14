@@ -49,33 +49,44 @@ class ErrorExtraccion extends Error {
   }
 }
 
-const INTENTOS = 3;
+// Cadena de modelos: si el principal esta saturado o sin cuota, se pasa al
+// siguiente. Medido 2026-10-14: gemini-3.6-flash daba 503 "high demand" en
+// TODAS las llamadas por horas, mientras los -lite respondian en ~3 s con la
+// misma lectura del ticket. En la capa gratis la cuota es POR MODELO, asi que
+// un 429 en uno no impide usar el otro. Ojo: los flash mas nuevos (3.7/3.8)
+// rechazan thinkingLevel MINIMAL con 400, por eso no estan aqui.
+const MODELOS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+// 1 intento por modelo: con 2, el usuario esperaba hasta ~21 s mientras el
+// principal fallaba dos veces antes de llegar al -lite.
+const INTENTOS_POR_MODELO = 1;
 const TIMEOUT_MS = 15000;
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// La capa gratis de Gemini responde 503 "high demand" muy seguido (medido:
-// ~la mitad de las llamadas en horas pico). Suele ser momentaneo, asi que se
-// reintenta con espera corta. Un 429 (cuota agotada) NO se reintenta: no se
+// 503/timeout: siguiente modelo. 429 (cuota agotada) no se reintenta en el mismo modelo: no se
 // libera en segundos y solo gastaria mas cuota.
 async function llamarGemini(client, request) {
   let ultimoError;
-  for (let intento = 1; intento <= INTENTOS; intento++) {
-    try {
-      return await client.models.generateContent({
-        ...request,
-        config: { ...request.config, httpOptions: { timeout: TIMEOUT_MS } },
-      });
-    } catch (err) {
-      ultimoError = err;
-      if (err.status === 429) {
-        throw new ErrorExtraccion('cuota', err.message);
+  let todosSinCuota = true;
+  for (const model of MODELOS) {
+    for (let intento = 1; intento <= INTENTOS_POR_MODELO; intento++) {
+      try {
+        return await client.models.generateContent({
+          ...request,
+          model,
+          config: { ...request.config, httpOptions: { timeout: TIMEOUT_MS } },
+        });
+      } catch (err) {
+        ultimoError = err;
+        if (err.status === 429) break; // siguiente modelo
+        todosSinCuota = false;
+        // 5xx o error de red/timeout (sin status): reintentable
+        const reintentable = !err.status || err.status >= 500;
+        if (!reintentable) throw err;
+        if (intento < INTENTOS_POR_MODELO) await esperar(1000);
       }
-      // 5xx o error de red/timeout (sin status): reintentable
-      const reintentable = !err.status || err.status >= 500;
-      if (!reintentable || intento === INTENTOS) break;
-      await esperar(1000 * intento);
     }
   }
+  if (todosSinCuota) throw new ErrorExtraccion('cuota', ultimoError.message);
   throw new ErrorExtraccion('saturado', ultimoError.message);
 }
 
@@ -86,7 +97,6 @@ async function extraerDatosRecibo(bufferImagen, mimeType, categoriasDisponibles)
   if (!client) throw new ErrorExtraccion('sin_config', 'GEMINI_API_KEY no configurada');
 
   const response = await llamarGemini(client, {
-    model: 'gemini-3.6-flash',
     contents: [
       {
         role: 'user',
